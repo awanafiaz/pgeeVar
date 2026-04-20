@@ -22,23 +22,26 @@ pak::pak("awanafiaz/pgeeVar")
 
 ## Quick start
 
-The example below simulates one small dataset, fits a penalized GEE model, and
-extracts a few covariance estimators. The commented lines show the shape of the
-returned objects for this fixed-seed example.
+The example below simulates one fixed-seed dataset, fits a penalized GEE model, and
+extracts a few covariance estimators. Inline comments explain each step, and the
+commented output lines show the shape of the returned objects for this fixed-seed
+example.
 
 ```r
 library(pgeeVar)
 
+# Simulate one balanced clustered binary dataset.
 example_data <- simulate_correlated_binary_data(
-  N = 20,
+  N = 40,
   gamma = 0.5,
   n_i = 4,
-  beta = c(-1.2, 0.6, 0.3),
+  beta = c(-1.2, 1.0, 0.7),
   rho = 0.2,
   corstr = "exchangeable",
-  seed = 1
+  seed = 4
 )
 
+# Fit a penalized GEE model with the formula interface.
 fitted_model <- pgee(
   y ~ X1 + obstime,
   data = example_data,
@@ -46,23 +49,27 @@ fitted_model <- pgee(
   corstr = "exchangeable"
 )
 
+# Inspect the first few rows of the generated data.
 head(example_data, 4)
 #>   id y X1 obstime
 #> 1  1 1  1     0.2
-#> 2  1 1  1     0.4
-#> 3  1 1  1     0.6
+#> 2  1 0  1     0.4
+#> 3  1 0  1     0.6
 #> 4  1 1  1     0.8
 
+# Summarize the fitted coefficients with the default covariance choice.
 round(summary(fitted_model)$coefficients, 3)
 #>             Estimate Std. Error t value Pr(>|t|)
-#> (Intercept)   -1.388      0.941  -1.475    0.159
-#> X1            -0.010      0.898  -0.012    0.991
-#> obstime        0.547      0.965   0.567    0.578
+#> (Intercept)   -1.216      0.535  -2.275    0.029
+#> X1             1.137      0.396   2.872    0.007
+#> obstime        0.652      0.782   0.834    0.410
 
+# Extract AR standard errors directly from the fitted covariance matrix.
 round(sqrt(diag(vcov(fitted_model, type = "AR"))), 3)
 #> (Intercept)          X1     obstime
-#>       0.941       0.898       0.965
+#>       0.535       0.396       0.782
 
+# Request a named subset of covariance estimators from the package catalog.
 names(compute_pgee_variances(fitted_model, c("AR", "MBN")))
 #> [1] "AR"  "MBN"
 ```
