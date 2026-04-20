@@ -1,0 +1,194 @@
+---
+title: "Simulation Design Workflow with pgeeVar"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Simulation Design Workflow with pgeeVar}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette shows how to set up a small simulation loop with `pgeeVar`. The
+examples are intentionally short so the vignette can build quickly. Full
+manuscript-scale simulations belong in repository scripts, not in the package
+vignettes.
+
+## A small simulation helper
+
+The helper below simulates one dataset, fits a penalized GEE model, and returns
+the `X1` estimate together with two covariance-based standard errors. That is
+enough structure for a compact design check or a unit-level simulation summary.
+
+```{r}
+library(pgeeVar)
+
+run_single_replication <- function(seed, N, corstr, rho, n_i = 4) {
+  simulated_data <- simulate_correlated_binary_data(
+    N = N,
+    gamma = 0.5,
+    n_i = n_i,
+    beta = c(-1.2, 0.6, 0.3),
+    rho = rho,
+    corstr = corstr,
+    seed = seed
+  )
+
+  fitted_model <- pgee(
+    y ~ X1 + obstime,
+    data = simulated_data,
+    id = id,
+    corstr = corstr
+  )
+
+  ar_standard_error <- sqrt(diag(vcov(fitted_model, type = "AR")))["X1"]
+  mbn_standard_error <- sqrt(diag(vcov(fitted_model, type = "MBN")))["X1"]
+
+  c(
+    x1_estimate = unname(coef(fitted_model)["X1"]),
+    ar_standard_error = unname(ar_standard_error),
+    mbn_standard_error = unname(mbn_standard_error),
+    converged = as.numeric(fitted_model$converged)
+  )
+}
+```
+
+## Compare a few small scenarios
+
+The next chunk runs a compact design with ten seeds per scenario. That is
+enough to show the workflow and still keep the vignette light.
+
+```{r}
+simulation_conditions <- list(
+  exchangeable = list(N = 20, corstr = "exchangeable", rho = 0.2),
+  ar1 = list(N = 20, corstr = "ar1", rho = 0.2)
+)
+
+replication_ids <- 1:10
+
+summarize_condition <- function(spec) {
+  condition_results <- do.call(
+    rbind,
+    lapply(replication_ids, function(seed) {
+      run_single_replication(
+        seed = seed,
+        N = spec$N,
+        corstr = spec$corstr,
+        rho = spec$rho
+      )
+    })
+  )
+
+  data.frame(
+    mean_x1_estimate = mean(condition_results[, "x1_estimate"]),
+    sd_x1_estimate = stats::sd(condition_results[, "x1_estimate"]),
+    mean_ar_standard_error = mean(condition_results[, "ar_standard_error"]),
+    mean_mbn_standard_error = mean(condition_results[, "mbn_standard_error"]),
+    convergence_rate = mean(condition_results[, "converged"])
+  )
+}
+
+condition_summary <- do.call(
+  rbind,
+  lapply(simulation_conditions, summarize_condition)
+)
+
+condition_summary
+```
+
+Each row is a simple condition-level summary. In a larger study you would
+usually add bias, empirical standard deviation, and coverage summaries, but the
+structure is the same.
+
+This style of helper is enough for many package-level simulation checks:
+
+- keep the data generation in one place;
+- keep the model formula fixed within a block of scenarios;
+- store only the summaries you need for the design question at hand.
+
+## Working with unbalanced designs
+
+Some estimators in `pgeeVar` require balanced cluster sizes. On an unbalanced
+dataset, those estimators still have named slots in the output, but the
+returned matrices are filled with `NA`. The first call below shows the
+documented warning once.
+
+```{r}
+unbalanced_example_data <- simulate_correlated_binary_data(
+  N = 18,
+  gamma = 0.5,
+  n_i = c(3, 5),
+  beta = c(-1.2, 0.6, 0.3),
+  rho = 0.2,
+  corstr = "exchangeable",
+  seed = 11
+)
+
+unbalanced_fit <- pgee(
+  y ~ X1 + obstime,
+  data = unbalanced_example_data,
+  id = id,
+  corstr = "exchangeable"
+)
+
+pan_covariance <- vcov(unbalanced_fit, type = "Pan")
+gst_covariance <- suppressWarnings(vcov(unbalanced_fit, type = "GST"))
+
+all(is.na(pan_covariance))
+all(is.na(gst_covariance))
+```
+
+You can use `available_estimators()` to see which estimators require balance
+before you launch a larger simulation grid.
+
+```{r}
+subset(available_estimators(), requires_balance)
+```
+
+## Using the low-level engine in a script
+
+For larger simulation studies, you may prefer the lower-level engine because it
+returns the full generating object and the raw fitter output.
+
+```{r}
+set.seed(3)
+
+generated_data <- dgp_generate(
+  N = 20,
+  gamma = 0.5,
+  n_i = 4,
+  beta = c(-1.2, 0.6, 0.3),
+  rho = 0.2,
+  corr_type = "exchangeable"
+)
+
+low_level_fit <- pgee_fit(
+  y = generated_data$data$y,
+  x = generated_data$data[generated_data$covnames],
+  id = generated_data$data$id,
+  corr_type = generated_data$corr_type
+)
+
+selected_covariances <- compute_pgee_variances(low_level_fit, c("LZ", "MBN", "AR"))
+names(selected_covariances)
+```
+
+The wrapper path and the low-level path can coexist in the same project. A
+common pattern is to prototype with `pgee()`, then switch the inner loop to
+`pgee_fit()` once you need tighter control over the stored fit object.
+
+## Practical limits for package vignettes
+
+The examples here are intentionally small. For manuscript work:
+
+- use more seeds than the vignette uses here;
+- separate balanced and unbalanced designs clearly;
+- in manuscript-scale runs, log both convergence and warning behavior, not only
+  coefficient summaries;
+- keep the package functions as the canonical implementation once the package
+  surface is frozen.

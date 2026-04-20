@@ -1,0 +1,21 @@
+citHeader(
+  "To cite pgeeVar in publications, please cite the package. ",
+  "If you discuss the variance-estimation framework itself, you may also cite ",
+  "the companion manuscript entry below."
+)
+
+citation(auto = meta)
+
+bibentry(
+  bibtype = "Unpublished",
+  title = "Overstuffed sandwiches and separation anxiety: finite-sample variance estimation for penalized GEE with near-separated binary data",
+  author = c(
+    person("Awan", "Afiaz"),
+    person(c("M.", "Shafiqur"), "Rahman")
+  ),
+  year = "2026",
+  note = paste(
+    "Working manuscript in the pgee-variance project.",
+    "Update this citation once the public preprint becomes available."
+  )
+)

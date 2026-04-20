@@ -1,0 +1,192 @@
+---
+title: "Getting Started with pgeeVar"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with pgeeVar}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette shows a basic `pgeeVar` analysis on one simulated binary
+longitudinal dataset. It is a small working example, not a reproduction of the
+manuscript analyses.
+
+The package workflow is centered on three tasks:
+
+1. simulate correlated binary longitudinal data;
+2. fit a penalized GEE model;
+3. extract one or more covariance estimators.
+
+## Simulate a working dataset
+
+`simulate_correlated_binary_data()` is the user-facing data generator. It
+returns an analysis-ready data frame and stores the generating setup in a
+`"pgee_scenario"` attribute.
+
+```{r}
+library(pgeeVar)
+
+example_data <- simulate_correlated_binary_data(
+  N = 20,
+  gamma = 0.5,
+  n_i = 4,
+  beta = c(-1.2, 0.6, 0.3),
+  rho = 0.2,
+  corstr = "exchangeable",
+  seed = 1
+)
+
+simulation_metadata <- attr(example_data, "pgee_scenario")
+
+head(example_data)
+simulation_metadata[c("N", "rho", "corstr", "clf_ok", "event_rate")]
+range(simulation_metadata$n_i)
+```
+
+The simulated data frame contains the cluster identifier `id`, the binary
+response `y`, and the covariates used in the fitted model. The scenario
+attribute is useful in simulation work because it lets you keep the generating
+setup attached to the data without managing a separate object.
+
+## Fit a penalized GEE model
+
+`pgee()` is the main modeling interface. It follows an `lm()` or `glm()`
+pattern: formula, data frame, and cluster identifier.
+
+```{r}
+fitted_model <- pgee(
+  y ~ X1 + obstime,
+  data = example_data,
+  id = id,
+  corstr = "exchangeable"
+)
+
+fitted_model
+model_summary <- summary(fitted_model)
+model_summary
+```
+
+The printed fit is short. The summary adds the coefficient table, working
+correlation estimate, convergence information, and the default covariance
+choice.
+
+If you want the coefficient table as a regular data frame for a report or a
+small diagnostic check, extract it directly from the summary object.
+
+```{r}
+coefficient_table <- data.frame(
+  term = rownames(model_summary$coefficients),
+  model_summary$coefficients,
+  row.names = NULL
+)
+
+coefficient_table
+```
+
+## Inspect the available covariance estimators
+
+The package currently exposes the 14 estimators studied in the manuscript.
+The public package interface uses short estimator names and keeps the
+manuscript notation in a separate catalog column.
+
+```{r}
+estimator_catalog <- available_estimators()
+estimator_catalog[, c("name", "notation", "class", "requires_balance")]
+```
+
+If you only need the accepted estimator names, use
+`available_estimator_names()`.
+
+```{r}
+available_estimator_names()
+```
+
+## Compare a few covariance estimators
+
+`vcov()` uses the fit's default covariance estimator unless you request another
+type. `compute_pgee_variances()` is the lower-level helper that returns the
+computed covariance matrices directly.
+
+```{r}
+ar_covariance <- vcov(fitted_model, type = "AR")
+mbn_covariance <- vcov(fitted_model, type = "MBN")
+lz_covariance <- vcov(fitted_model, type = "LZ")
+
+se_table <- data.frame(
+  term = names(coef(fitted_model)),
+  LZ = sqrt(diag(lz_covariance)),
+  MBN = sqrt(diag(mbn_covariance)),
+  AR = sqrt(diag(ar_covariance)),
+  row.names = NULL
+)
+
+se_table
+```
+
+That table is often enough for a first comparison. If you want a selected subset
+of covariance matrices for later use, request them directly.
+
+```{r}
+selected_covariances <- compute_pgee_variances(fitted_model, c("MD", "FZ", "AR"))
+names(selected_covariances)
+dim(selected_covariances$AR)
+```
+
+## Predictions, residuals, and intervals
+
+The `"pgee"` object supports the standard extraction methods needed for routine
+analysis.
+
+```{r}
+predict(fitted_model, type = "response")[1:6]
+residuals(fitted_model, type = "pearson")[1:6]
+confint(fitted_model, type = "AR")
+```
+
+Predictions on new data use the stored formula terms and factor levels, so you
+can pass a subset of the original data frame or a new data frame with the same
+variables.
+
+```{r}
+prediction_rows <- example_data[1:4, ]
+predict(fitted_model, newdata = prediction_rows, type = "response")
+```
+
+## When to drop to the low-level engine
+
+Most users should stay with `simulate_correlated_binary_data()` and `pgee()`.
+The lower-level functions `dgp_generate()` and `pgee_fit()` are still available
+for simulation scripts that need tighter control over the generated object or
+over the fitting inputs.
+
+```{r}
+set.seed(2)
+
+generated_data <- dgp_generate(
+  N = 20,
+  gamma = 0.5,
+  n_i = 4,
+  beta = c(-1.2, 0.6, 0.3),
+  rho = 0.2
+)
+
+low_level_fit <- pgee_fit(
+  y = generated_data$data$y,
+  x = generated_data$data[generated_data$covnames],
+  id = generated_data$data$id,
+  corr_type = generated_data$corr_type
+)
+
+names(compute_pgee_variances(low_level_fit, c("LZ", "AR")))
+```
+
+Use the low-level path when you need raw control over the generated object or
+want to trim wrapper overhead inside a larger simulation loop. For ordinary data
+analysis, `simulate_correlated_binary_data()` and `pgee()` are the simpler path.

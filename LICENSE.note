@@ -1,0 +1,14 @@
+Overall package license: `GPL (>= 2)`.
+
+Component provenance notes:
+
+- `R/clf_generate.R` contains code adapted from the archived `binarySimCLF`
+  package implementation by Kunthel By and Bahjat F. Qaqish. The archived
+  package metadata states `License: GPL (>= 2)`.
+- `R/pgee_fit.R` descends from the PGEE implementation, which
+  in turn used code from the public `geefirthr` package by Momenul Haque
+  Mondol and M. Shafiqur Rahman hosted on github. Public package metadata for `geefirthr`
+  reports `License: GPL-2`.
+
+This note exists to keep the package-level GPL license and the provenance of
+adapted upstream GPL-compatible components explicit. 

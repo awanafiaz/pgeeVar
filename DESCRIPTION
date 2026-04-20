@@ -1,0 +1,32 @@
+Package: pgeeVar
+Title: Penalized GEE Variance Estimation Tools for Finite-Sample Binary Data
+Version: 0.0.0.9000
+Authors@R: c(
+    person("Awan", "Afiaz", email = "aafiaz@uw.edu", role = c("aut", "cre")),
+    person("Kunthel", "By", role = c("ctb", "cph"),
+           comment = "binarySimCLF-derived CLF code"),
+    person("Bahjat F.", "Qaqish", role = c("ctb", "cph"),
+           comment = "binarySimCLF-derived CLF code and CLF implementation"),
+    person("Momenul Haque", "Mondol", role = c("ctb", "cph"),
+           comment = "geefirthr-derived PGEE fitting code"),
+    person("M. Shafiqur", "Rahman", role = c("ctb", "cph"),
+           comment = "geefirthr-derived PGEE fitting code")
+    )
+Description: Tools for penalized generalized estimating equation fitting,
+    simulating correlated binary longitudinal data, and computing 14
+    small-sample covariance estimators for the comparison workflow studied in
+    the pgee-variance methods project.
+License: GPL (>= 2)
+Encoding: UTF-8
+Imports:
+    MASS,
+    utils
+Suggests:
+    knitr,
+    logistf,
+    rmarkdown,
+    testthat (>= 3.0.0)
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
