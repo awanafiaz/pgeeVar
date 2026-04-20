@@ -23,7 +23,8 @@ pak::pak("awanafiaz/pgeeVar")
 ## Quick start
 
 The example below simulates one small dataset, fits a penalized GEE model, and
-extracts a few covariance estimators.
+extracts a few covariance estimators. The commented lines show the shape of the
+returned objects for this fixed-seed example.
 
 ```r
 library(pgeeVar)
@@ -45,9 +46,25 @@ fitted_model <- pgee(
   corstr = "exchangeable"
 )
 
-summary(fitted_model)
-vcov(fitted_model, type = "MD")
-compute_pgee_variances(fitted_model, c("AR", "MBN"))
+head(example_data, 4)
+#>   id y X1 obstime
+#> 1  1 1  1     0.2
+#> 2  1 1  1     0.4
+#> 3  1 1  1     0.6
+#> 4  1 1  1     0.8
+
+round(summary(fitted_model)$coefficients, 3)
+#>             Estimate Std. Error t value Pr(>|t|)
+#> (Intercept)   -1.388      0.941  -1.475    0.159
+#> X1            -0.010      0.898  -0.012    0.991
+#> obstime        0.547      0.965   0.567    0.578
+
+round(sqrt(diag(vcov(fitted_model, type = "AR"))), 3)
+#> (Intercept)          X1     obstime
+#>       0.941       0.898       0.965
+
+names(compute_pgee_variances(fitted_model, c("AR", "MBN")))
+#> [1] "AR"  "MBN"
 ```
 
 The default summary reports the coefficient table, the working-correlation
